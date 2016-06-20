@@ -96,9 +96,7 @@ abstract class Object {
       $this->gcObjProcessConfig($var, $config);
     }
 
-    if ($args = func_get_args()) {
-      call_user_func_array([$this, 'initialize'], $args);
-    }
+    call_user_func_array([$this, 'initialize'], func_get_args());
   }
 
   /**
