@@ -149,7 +149,7 @@ abstract class Object {
       $this->gcObjPropertyMap[self::TYPE][$var] = $config[self::TYPE];
     }
 
-    $this->gcObjSetPropertyDefaultValue($var, $config, $setter);
+    $this->gcObjSetPropertyDefaultValue($var, $config);
   }
 
   /**
@@ -208,22 +208,16 @@ abstract class Object {
    *
    * @param string $var
    * @param array $config
-   * @param string|null $setter
-   *   If a setter is specified then the setter will be used, rather than direct
-   *   assignment. This will invoke any type checks.
    */
-  private function gcObjSetPropertyDefaultValue($var, array $config, $setter = NULL) {
+  private function gcObjSetPropertyDefaultValue($var, array $config) {
     $default = NULL;
     if (isset($config[self::DEFAULT_VALUE])) {
       $default = $config[self::DEFAULT_VALUE];
     }
 
-    if ($setter) {
-      call_user_func_array([$this, $setter], [$default]);
-    }
-    else {
-      $this->{$var} = $default;
-    }
+    // Assign variable directly, we do not check type here as the variable may
+    // not be nullable, but will start out as NULL.
+    $this->{$var} = $default;
   }
 
   /**
@@ -282,8 +276,8 @@ abstract class Object {
 
     $type = $this->gcObjPropertyMap[self::TYPE][$var];
 
-    if (!$value instanceof $type) {
-      throw new \InvalidArgumentException("Value for property {$var} must be of type {$type}.");
+    if (($given = gettype($value)) !== $type) {
+      throw new \InvalidArgumentException("Value for property {$var} must be of type {$type}. {$given} given.");
     }
   }
 
