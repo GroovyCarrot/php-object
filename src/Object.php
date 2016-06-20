@@ -95,10 +95,21 @@ abstract class Object {
     foreach ($vars as $var => $config) {
       $this->gcObjProcessConfig($var, $config);
     }
+
+    call_user_func_array([$this, 'initialize'], func_get_args());
   }
 
   /**
+   * Exposed initializer method.
    *
+   * @return $this
+   */
+  protected function initialize() {
+    return $this;
+  }
+
+  /**
+   * Process the configuration for a property.
    *
    * @param $var
    * @param array|mixed $config
@@ -223,7 +234,54 @@ abstract class Object {
       return $this->{$var};
     }
 
-    trigger_error('Call to undefined method ' . get_class($this) . '::' . $name.'()', E_USER_ERROR);
+    trigger_error('Call to undefined method ' . $this->className() . '::' . $name .'()', E_USER_ERROR);
+  }
+
+  /**
+   * Determine if this object implements a method.
+   *
+   * @param string $method
+   *
+   * @return bool
+   */
+  public static function hasMethod($method) {
+    return method_exists(get_called_class(), $method);
+  }
+
+  /**
+   * The name of the class.
+   *
+   * @return string
+   */
+  public static function className() {
+    return get_called_class();
+  }
+
+  /**
+   * The name of the parent class.
+   *
+   * @return string
+   */
+  public static function parentClass() {
+    return get_parent_class(get_called_class());
+  }
+
+  /**
+   * Get the properties for this object.
+   *
+   * @return array
+   */
+  public function objectVars() {
+    return get_object_vars($this);
+  }
+
+  /**
+   * Get the properties for this class.
+   *
+   * @return array
+   */
+  public static function classVars() {
+    return get_class_vars(get_called_class());
   }
 
 }
