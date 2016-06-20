@@ -11,6 +11,8 @@
 
 namespace GroovyCarrot;
 
+use GroovyCarrot\Debug\ObjectPropertyInfo;
+
 /**
  * Class Object
  *
@@ -81,6 +83,11 @@ abstract class Object {
   const WRITABLE = 'writable';
 
   /**
+   * Strict typing for property.
+   */
+  const TYPE = 'type';
+
+  /**
    * Internal property mapping information.
    */
   private $gcObjPropertyMap;
@@ -130,14 +137,19 @@ abstract class Object {
     }
 
     $config = $config + self::PROPERTY_PUBLIC;
+    $setter = NULL;
     if ($config[self::WRITABLE]) {
-      $this->gcObjCreateSetterForVar($var, $config);
+      $setter = $this->gcObjCreateSetterForVar($var, $config);
     }
     if ($config[self::READABLE]) {
-      $this->gcObjCreateGetterForVar($var, $config);
+      $getter = $this->gcObjCreateGetterForVar($var, $config);
     }
 
-    $this->gcObjSetPropertyDefaultValue($var, $config);
+    if (isset($config[self::TYPE])) {
+      $this->gcObjPropertyMap[self::TYPE][$var] = $config[self::TYPE];
+    }
+
+    $this->gcObjSetPropertyDefaultValue($var, $config, $setter);
   }
 
   /**
@@ -145,6 +157,9 @@ abstract class Object {
    *
    * @param string $var
    * @param array $config
+   *
+   * @return string
+   *   The setter method name.
    */
   private function gcObjCreateSetterForVar($var, array $config) {
     if (isset($config[self::SETTER])) {
@@ -157,7 +172,8 @@ abstract class Object {
       $setter = 'set' . ucfirst($var);
     }
 
-    $this->gcObjPropertyMap['setters'][$setter] = $var;
+    $this->gcObjPropertyMap[self::SETTER][$setter] = $var;
+    return $setter;
   }
 
   /**
@@ -165,6 +181,9 @@ abstract class Object {
    *
    * @param string $var
    * @param array $config
+   *
+   * @return string
+   *   The getter method name.
    */
   private function gcObjCreateGetterForVar($var, array $config) {
     if (isset($config[self::GETTER])) {
@@ -177,7 +196,8 @@ abstract class Object {
       $getter = 'get' . ucfirst($var);
     }
 
-    $this->gcObjPropertyMap['getters'][$getter] = $var;
+    $this->gcObjPropertyMap[self::GETTER][$getter] = $var;
+    return $getter;
   }
 
   /**
@@ -188,13 +208,22 @@ abstract class Object {
    *
    * @param string $var
    * @param array $config
+   * @param string|null $setter
+   *   If a setter is specified then the setter will be used, rather than direct
+   *   assignment. This will invoke any type checks.
    */
-  private function gcObjSetPropertyDefaultValue($var, array $config) {
+  private function gcObjSetPropertyDefaultValue($var, array $config, $setter = NULL) {
     $default = NULL;
     if (isset($config[self::DEFAULT_VALUE])) {
       $default = $config[self::DEFAULT_VALUE];
     }
-    $this->{$var} = $default;
+
+    if ($setter) {
+      call_user_func_array([$this, $setter], [$default]);
+    }
+    else {
+      $this->{$var} = $default;
+    }
   }
 
   /**
@@ -220,21 +249,53 @@ abstract class Object {
    * @return mixed|void
    */
   public function __call($name, array $arguments) {
-    if (isset($this->gcObjPropertyMap['setters'][$name])) {
+    if (isset($this->gcObjPropertyMap[self::SETTER][$name])) {
       if (empty($arguments)) {
         $this->gcWarnMissingArgument($name);
       }
 
-      $var = $this->gcObjPropertyMap['setters'][$name];
-      $this->{$var} = reset($arguments);
+      $var = $this->gcObjPropertyMap[self::SETTER][$name];
+      $value = reset($arguments);
+      $this->gcObjCheckType($value, $var);
+
+      $this->{$var} = $value;
       return $this;
     }
-    elseif (isset($this->gcObjPropertyMap['getters'][$name])) {
-      $var = $this->gcObjPropertyMap['getters'][$name];
+    elseif (isset($this->gcObjPropertyMap[self::GETTER][$name])) {
+      $var = $this->gcObjPropertyMap[self::GETTER][$name];
       return $this->{$var};
     }
 
     trigger_error('Call to undefined method ' . $this->className() . '::' . $name .'()', E_USER_ERROR);
+  }
+
+  /**
+   * Check that a provided value matches a required type for a property.
+   *
+   * @param mixed $value
+   * @param string $var
+   */
+  private function gcObjCheckType($value, $var) {
+    if (!isset($this->gcObjPropertyMap[self::TYPE][$var])) {
+      return;
+    }
+
+    $type = $this->gcObjPropertyMap[self::TYPE][$var];
+
+    if (!$value instanceof $type) {
+      throw new \InvalidArgumentException("Value for property {$var} must be of type {$type}.");
+    }
+  }
+
+  /**
+   * Determine if this class implements a method.
+   *
+   * @param string $method
+   *
+   * @return bool
+   */
+  public static function hasClassMethod($method) {
+    return method_exists(get_called_class(), $method);
   }
 
   /**
@@ -244,8 +305,10 @@ abstract class Object {
    *
    * @return bool
    */
-  public static function hasMethod($method) {
-    return method_exists(get_called_class(), $method);
+  public function hasMethod($method) {
+    return $this->hasClassMethod($method)
+           || isset($this->gcObjPropertyMap[self::GETTER][$method])
+           || isset($this->gcObjPropertyMap[self::SETTER][$method]);
   }
 
   /**
@@ -272,7 +335,9 @@ abstract class Object {
    * @return array
    */
   public function objectVars() {
-    return get_object_vars($this);
+    $vars = get_object_vars($this);
+    unset($vars['gcObjPropertyMap']);
+    return $vars;
   }
 
   /**
@@ -282,6 +347,19 @@ abstract class Object {
    */
   public static function classVars() {
     return get_class_vars(get_called_class());
+  }
+
+  /**
+   * Debug information magic method.
+   *
+   * @return array
+   */
+  public function __debugInfo() {
+    $data = [];
+    foreach ($this->objectVars() as $var => $value) {
+      $data[$var] = new ObjectPropertyInfo($var, $value, $this->gcObjPropertyMap);
+    }
+    return $data;
   }
 
 }
