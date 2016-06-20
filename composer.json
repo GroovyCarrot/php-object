@@ -1,0 +1,12 @@
+{
+  "name": "groovycarrot/object",
+  "description": "An extended PHP object class.",
+  "authors": [
+    {
+      "name": "Jake Wise",
+      "email": "jake.wise@groovycarrot.co.uk",
+      "role": "Developer"
+    }
+  ],
+}
+
