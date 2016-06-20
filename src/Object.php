@@ -277,7 +277,7 @@ abstract class Object {
     $type = $this->gcObjPropertyMap[self::TYPE][$var];
 
     if (($given = gettype($value)) !== $type) {
-      throw new \InvalidArgumentException("Value for property {$var} must be of type {$type}. {$given} given.");
+      throw new \InvalidArgumentException("Value for property {$var} must be an instance of {$type}, {$given} given.");
     }
   }
 
