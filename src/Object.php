@@ -229,7 +229,7 @@ abstract class Object {
 
       $var = $this->gcObjPropertyMap['setters'][$name];
       $this->{$var} = reset($arguments);
-      return;
+      return $this;
     }
     elseif (isset($this->gcObjPropertyMap['getters'][$name])) {
       $var = $this->gcObjPropertyMap['getters'][$name];
